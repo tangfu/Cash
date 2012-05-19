@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <pwd.h>
 #include <readline/readline.h>
+#include <readline/history.h>
 
 /* Prototypes */
 void open_log(void);

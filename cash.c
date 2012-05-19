@@ -34,12 +34,10 @@ const struct option long_options[] = {
 /*for input*/
 char line[4096];        
 char *argv[4096] = {NULL};  
-
+char* input;
 /*History file, filename, and open flag*/
-const char *history_filename = "/.cash_history";    
+char *history_filename;
 const char *rc_filename = "/.cashrc";
-char *home_path;
-FILE *history_file;
 FILE *rc_file;
 char *PS1;
 
@@ -49,10 +47,9 @@ int cash_interactive, cash_terminal;
 
 /*flags*/
 _Bool restricted;         /*For restricted shell, 1 is restricted, 0 is not*/
-_Bool open_history_file;  /*history file open. 1 is open, 0 is not*/
-_Bool no_history;         /*no history option, 1 is no history, 0 no history*/
 _Bool logging;            /*logging option, 1 is on, 0 is off.*/
 _Bool verbose;            /*verbose option, 1 is on, 0 is off.*/
+_Bool history;
 _Bool specified_PS1;
 
 /* This is our structure to hold environment variables */
@@ -85,12 +82,8 @@ void open_log(void){
  * is freed, and any open files are closed.
  */
 void exit_clean(int ret_no){
-  if(open_history_file)
-    if(fclose(history_file) != 0){
-      perror("fclose");
-      if(logging)
-	syslog(LOG_ERR,"failed to close history file on exit");
-    }
+  if(history_filename)
+    free(history_filename);
   if(env)
     free(env);
   if(rc_file)
@@ -130,7 +123,6 @@ void init_env(void){
       setenv("TERM", env->term, 1);
 
       cash_pid = getpid();
-      open_history_file = 0;
       if(logging)
 	syslog(LOG_DEBUG, "shell spawned");
     }
@@ -221,41 +213,6 @@ void add_nl(char *sp, int len){
   return;
 }
 
-/*
- * This function is actually entirely of my own doing
- * first it checks to see if the history file has been
- * opened yet, if not it makes the path using some 
- * string magic and opens the file, then writes to it.
- * If it's already open, it simply writes to the file 
- * and returns. Returns non-zero on error zero otherwise.
- * open_history_file is boolean. So open file is 1, otherwise 0.
- */
-
-int write_history_file(char *input){
-  if(open_history_file == 0){
-    if(home_path == NULL)
-      home_path = malloc(sizeof(char) * 4096);
-    strcpy(home_path, env->home);
-    strcat(home_path, history_filename);
-
-    if( (history_file = fopen(home_path, "a+")) == NULL){
-      if(logging)
-	syslog(LOG_ERR,"unable to open history file");
-      free(home_path);
-      perror("history");
-      return -1;
-    }
-    else {
-      if(home_path != NULL)
-	free(home_path);
-      open_history_file = 1;
-    }
-  }  
-  add_nl(input, strlen(input));
-  fprintf(history_file, "%s", input);
-  return 0;
-}
-
 int execute(char **argv){
   pid_t pid;
   int status;
@@ -280,27 +237,41 @@ int execute(char **argv){
   return 0;
 }
 
+char *get_history_filename(void){
+  /*Allocates enough memory for both the home path and a 32 character long filename
+   * should be enough. Just remember to check for overflows.*/
+  history_filename = NULL;
+  history_filename = malloc(sizeof(env->home) + (sizeof(char) * 32));
+  strcpy(history_filename, env->home);
+  strcat(history_filename, "/.cash_history");
+  return history_filename;
+}
+
 int main(int argc, char* arg[]){
   char fmt_PS1[4096];
   logging    = 0;
   restricted = 0;
-  no_history = 0;
   verbose    = 0;
-  char* input = 0;
-  get_options(argc,arg);
+  history    = 1;
 
+  input = 0;
+
+  get_options(argc,arg);
+  
+  if(history){
+    using_history();
+  }
   if(logging){
     logging = 1;
     open_log();
   }
   init_env();
   parse_rc();
-
   if(!PS1){
     PS1 = default_prompt; 
     specified_PS1 = 0;
   }
-
+  
   /*
    * Here's the main loop.
    * First we go ahead and get the current working directory
@@ -314,35 +285,32 @@ int main(int argc, char* arg[]){
    */
    
   while(1){  
-    if( (getcwd(env->cur_dir, sizeof(env->cur_dir)) == NULL)) {
+    if( (getcwd(env->cur_dir, sizeof(env->cur_dir)) == NULL))
       if(logging)
 	syslog(LOG_ERR, "couldnt get current working directory");
-    }    
-    
-    if(!no_history){
-      if(write_history_file(line) == -1){
-	fprintf(stderr,"history disabled, if logging is enabled check /var/log/messages for more info\n");
-	syslog(LOG_ERR,"history file couldn't be opened or written to, history disabled");
-	no_history = 1;
-      }
-    }
     
     memset(fmt_PS1, 0, 4096);
     format_prompt(fmt_PS1, 4096);
-    
     input = readline(fmt_PS1);
-    if(!input)
-      exit_clean(0);
     
-    if(strlen(input) < 1)
+    if(!input || strlen(input) < 1)
       continue;
-
     strcpy(line, input);
     parse(line, argv);      
-    
+
+    if(history){
+      if(!history_filename)
+	get_history_filename();
+      else
+      add_history(line);
+      write_history(history_filename);
+    }
     if(built_ins(argv) == 1)
       continue;
     else
       execute(argv);
+    
+    if(input)
+      free(input);
   }
 }

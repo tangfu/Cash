@@ -20,7 +20,8 @@
 
 extern _Bool restricted;
 extern _Bool open_history_file;
-extern _Bool no_history;
+extern _Bool history;
+extern _Bool alt_history;
 extern _Bool logging;
 extern _Bool verbose;
 
@@ -29,6 +30,8 @@ extern ENVIRONMENT *env;
 extern const struct option long_options[];
 extern const char* version_string;
 extern const char* help_string;
+
+extern char *alt_history_filename;
 
 int built_ins(char *in[]){
   if(strcmp(in[0], "#") == 0)
@@ -77,7 +80,7 @@ void print_usage(FILE* stream, int exit_code, const char *string){
 void get_options(int arg_count, char **arg_value){
   int next_option;
   const char* const short_options = "hrnvlV";
-  /*Here we check for startup flags, and act accordingly*/
+  /*Here we check for command line arguments and act accordingly*/
   do {
     next_option = getopt_long(arg_count, arg_value, short_options, long_options, NULL);
     switch(next_option){
@@ -89,7 +92,7 @@ void get_options(int arg_count, char **arg_value){
       break;
     case 'n':
       fprintf(stderr,"history file will not be opened for this session\n");
-      no_history = 1;
+      history = 0;
       break;
     case 'v':
       print_usage(stdout, 0, version_string);
@@ -101,7 +104,8 @@ void get_options(int arg_count, char **arg_value){
       fprintf(stderr,"log will be written to both /var/log/messages and stderr\n");
       if(!logging)
 	logging = 1;
-      verbose = 1;
+      verbose = 1;      
+      break;
     case -1:
       break;
     case '?':
