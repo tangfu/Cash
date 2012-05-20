@@ -302,9 +302,7 @@ int main(int argc, char* arg[]){
     parse_rc();
 
   if(!PS1){
-    PS1 = default_prompt; 
-    /*    PS1 = malloc(sizeof(default_prompt));
-	  strcpy(PS1, default_prompt);*/
+    PS1 = (char *) default_prompt; 
     specified_PS1 = 0;
   }
   
