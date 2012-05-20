@@ -16,9 +16,10 @@
 
 */
 #include "cash.h"
+#include "job_control.h"
 
 /*Informational stuff*/
-const char *version_string = "cash-0.1";
+char *version_string = "cash-0.1";
 const char *help_string = "Cash, version 0.1, Linux\n--help        -h    show this help screen\n--version     -v    show version info\n--restricted  -r    run restricted shell (no cd)\n--no-history  -n    dont write history to file for this session\n--logging     -l    the shell will keep a log in /var/log/messages for this session\n--verbose     -V    the shell will write the log to both /var/log/messages and stderr.                                        logging will be turned on with verbose\n";
 
 const struct option long_options[] = {
@@ -28,32 +29,40 @@ const struct option long_options[] = {
   {"version",    0, NULL, 'v'},
   {"verbose",    0, NULL, 'V'},
   {"logging",    0, NULL, 'l'},
+  {"no-rc",      0, NULL, 'R'},
   {NULL,         0, NULL,  0 }
 };
 
 /*for input*/
 char line[4096];        
-char *argv[4096] = {NULL};  
+char *argv[4096];  
 char* input;
-/*History file, filename, and open flag*/
-char *history_filename;
+
 const char *rc_filename = "/.cashrc";
+char *default_hist_name = "/.cash_history";
+char *history_filename;
+
 FILE *rc_file;
 char *PS1;
 
 /*Shell stuff*/
-pid_t cash_pid;
+pid_t cash_pid, cash_pgid;
 int cash_interactive, cash_terminal;
 
 /*flags*/
-_Bool restricted;         /*For restricted shell, 1 is restricted, 0 is not*/
-_Bool logging;            /*logging option, 1 is on, 0 is off.*/
-_Bool verbose;            /*verbose option, 1 is on, 0 is off.*/
-_Bool history;
-_Bool specified_PS1;
+_Bool restricted;         /*For restricted shell, 1 is restricted, 0 is not. default 0*/
+_Bool logging;            /*logging option, 1 is on, 0 is off. default 0*/
+_Bool verbose;            /*verbose option, 1 is on, 0 is off. default 0*/
+_Bool history;            /*History file on/off. 1 is on, 0 is off. default 1*/
+_Bool specified_PS1;      /*The prompt that is specified in ~/.cashrc*/
+_Bool read_rc;            /*Read rc on/off. 1 is yes, 0 is no. default 1*/
 
 /* This is our structure to hold environment variables */
 ENVIRONMENT *env;
+
+/* Used to get status of input history*/
+HIST_ENTRY **history_entry;
+HISTORY_STATE * history_status;
 
 /* Custom shell option strings */
 const char* shell_user = "\\u";
@@ -66,6 +75,8 @@ const char* default_prompt = "\\v:\\w$ ";
 extern int built_ins(char **);
 extern void print_usage(FILE*, int, const char *);
 extern void get_options(int, char **);
+
+extern struct termios cash_tmodes;
 
 void open_log(void){
   if(verbose){
@@ -82,6 +93,10 @@ void open_log(void){
  * is freed, and any open files are closed.
  */
 void exit_clean(int ret_no){
+  if(history)
+    append_history(4096, history_filename);
+  if(input)
+    free(input);
   if(history_filename)
     free(history_filename);
   if(env)
@@ -98,8 +113,11 @@ void exit_clean(int ret_no){
 }
 
 void init_env(void){
+  cash_terminal = STDIN_FILENO;
   cash_interactive = isatty(cash_terminal);
-  if(cash_interactive != 0){
+  if(cash_interactive){
+    while(tcgetpgrp (cash_terminal) != (cash_pgid = getpgrp ()))
+      kill (- cash_pgid, SIGTTIN);
     env = malloc(sizeof(ENVIRONMENT));
     if(!env){
       perror("Couldn't allocate memory to environemnt structure\n");
@@ -109,6 +127,10 @@ void init_env(void){
       }
     }else{
       signal(SIGINT, SIG_IGN);
+      signal (SIGQUIT, SIG_IGN);
+      signal (SIGTSTP, SIG_IGN);
+      signal (SIGTTIN, SIG_IGN);
+      signal (SIGTTOU, SIG_IGN);
       
       env->home    = getenv("HOME");
       env->logname = getenv("LOGNAME");
@@ -123,6 +145,14 @@ void init_env(void){
       setenv("TERM", env->term, 1);
 
       cash_pid = getpid();
+      cash_pgid = getpid();
+      if(setpgid(cash_pgid, cash_pgid) < 0){
+	syslog(LOG_ERR,"could not spawn interactive shell");
+	perror("could not spawn interactive shell, failed at init");
+	exit_clean(1);
+      }
+      tcsetpgrp(cash_terminal, cash_pgid);
+      tcgetattr(cash_terminal, &cash_tmodes);
       if(logging)
 	syslog(LOG_DEBUG, "shell spawned");
     }
@@ -159,7 +189,7 @@ void parse_rc(void){
     return;
   }
   if(!(rc_file = fopen(buf, "r"))){
-    syslog(LOG_DEBUG, "rc file wasnt found or couldnt be opened");
+    syslog(LOG_DEBUG, "rc file wasnt found or could not be opened");
     free(buf);
     return;
   }
@@ -170,7 +200,8 @@ void parse_rc(void){
       while(p[i++] != '\"')
 	continue;
       i--;
-      PS1 = malloc(sizeof(char) * (i+1));
+      if(!PS1)
+	PS1 = malloc(sizeof(char) * (i+1));
       strncpy(PS1, p, i);
       PS1[i] = '\0';
       specified_PS1 = 1;
@@ -237,21 +268,21 @@ int execute(char **argv){
   return 0;
 }
 
-char *get_history_filename(void){
-  /*Allocates enough memory for both the home path and a 32 character long filename
-   * should be enough. Just remember to check for overflows.*/
-  history_filename = NULL;
-  history_filename = malloc(sizeof(env->home) + (sizeof(char) * 32));
+void get_history_filename(void){
+  size_t len;
+  len = strlen(env->home);
+  history_filename = malloc(4096);
   strcpy(history_filename, env->home);
-  strcat(history_filename, "/.cash_history");
-  return history_filename;
+  strcat(history_filename, default_hist_name);
 }
 
 int main(int argc, char* arg[]){
   char fmt_PS1[4096];
+
   logging    = 0;
   restricted = 0;
   verbose    = 0;
+  read_rc    = 1;
   history    = 1;
 
   input = 0;
@@ -265,10 +296,15 @@ int main(int argc, char* arg[]){
     logging = 1;
     open_log();
   }
+
   init_env();
-  parse_rc();
+  if(read_rc)
+    parse_rc();
+
   if(!PS1){
     PS1 = default_prompt; 
+    /*    PS1 = malloc(sizeof(default_prompt));
+	  strcpy(PS1, default_prompt);*/
     specified_PS1 = 0;
   }
   
@@ -283,7 +319,7 @@ int main(int argc, char* arg[]){
    * to execute it, so we skip the execute function, otherwise we go ahead 
    * and execute it.
    */
-   
+
   while(1){  
     if( (getcwd(env->cur_dir, sizeof(env->cur_dir)) == NULL))
       if(logging)
@@ -292,25 +328,21 @@ int main(int argc, char* arg[]){
     memset(fmt_PS1, 0, 4096);
     format_prompt(fmt_PS1, 4096);
     input = readline(fmt_PS1);
-    
-    if(!input || strlen(input) < 1)
+    if(!input)
+      exit_clean(1);
+    if(strlen(input) < 1)
       continue;
     strcpy(line, input);
     parse(line, argv);      
-
     if(history){
-      if(!history_filename)
+      if(!history_filename)	
 	get_history_filename();
       else
-      add_history(line);
-      write_history(history_filename);
+	add_history(line);
     }
     if(built_ins(argv) == 1)
       continue;
     else
       execute(argv);
-    
-    if(input)
-      free(input);
   }
 }

@@ -24,6 +24,7 @@ extern _Bool history;
 extern _Bool alt_history;
 extern _Bool logging;
 extern _Bool verbose;
+extern _Bool read_rc;
 
 extern ENVIRONMENT *env;
 
@@ -31,36 +32,32 @@ extern const struct option long_options[];
 extern const char* version_string;
 extern const char* help_string;
 
-extern char *alt_history_filename;
+/*This will most likely undergo some major revamps in the near future.
+* The idea is to read the input we get from the user, see if it's a 
+* built in, then execute it and return 1. (if 1 is returned the main
+* loop back in cash.c skips the execute function and returns to the
+* start with the prompt*/
 
 int built_ins(char *in[]){
-  if(strcmp(in[0], "#") == 0)
+  if(strcmp(in[0], "reparse-rc") == 0){
+    parse_rc();
+    return 1;
+  }
+  if(strncmp(in[0], "#", 1) == 0)
     return 1;
   if(strcmp(in[0], "exit") == 0){
     exit_clean(0);
   }
-  if(restricted && strcmp(in[0], "cd") == 0){
-    fprintf(stderr,"Can't cd: restricted shell\n");
-    if(logging)
-      syslog(LOG_NOTICE,"restricted shell attempted to cd");
-    else
-      return 1;
-  }
   else
-    /*
-     * Everything beyond this point is restricted and can't be executed if the 
-     * shell is run with the -r/--restrcited flag. Make sure not to put anything
-     * critical here, or there will be issues
-     */
-    if(strcmp(in[0], "cd") == 0 && in[1] != NULL) {
-    if(chdir(in[1]) == -1){
-      perror("cd");
-      return 1;
+    if(strcmp(in[0], "cd") == 0 && in[1] != NULL && restricted == 0) {
+      if(chdir(in[1]) == -1){
+	perror("cd");
+	return 1;
+      }
+      else
+	return 1;
     }
-    else
-      return 1;
-  }
-  if(strncmp(in[0], "cd", 2) == 0 && in[1] == NULL){
+  if(strncmp(in[0], "cd", 2) == 0 && in[1] == NULL && restricted == 0){
     if(chdir(env->home) == -1){
       perror("cd");
       return 1;
@@ -79,7 +76,7 @@ void print_usage(FILE* stream, int exit_code, const char *string){
 
 void get_options(int arg_count, char **arg_value){
   int next_option;
-  const char* const short_options = "hrnvlV";
+  const char* const short_options = "hrnvlVR";
   /*Here we check for command line arguments and act accordingly*/
   do {
     next_option = getopt_long(arg_count, arg_value, short_options, long_options, NULL);
@@ -88,6 +85,10 @@ void get_options(int arg_count, char **arg_value){
       print_usage(stdout, 0, help_string);
       break;
     case 'r':
+      if(read_rc)
+	read_rc = 0;
+      if(!logging)
+	logging = 1;
       restricted = 1;
       break;
     case 'n':
@@ -98,14 +99,18 @@ void get_options(int arg_count, char **arg_value){
       print_usage(stdout, 0, version_string);
       break;
     case 'l':
+      fprintf(stderr,"log will be written for this session. log is kept in /var/log/messages\n");
       logging = 1;
       break;
     case 'V':
-      fprintf(stderr,"log will be written to both /var/log/messages and stderr\n");
+      fprintf(stderr,"log will be written to both /var/log/messages and stderr for this session\n");
       if(!logging)
 	logging = 1;
       verbose = 1;      
       break;
+    case 'R':
+      fprintf(stderr,"rc-file will not be read for this session\n");      
+      read_rc = 0;
     case -1:
       break;
     case '?':
