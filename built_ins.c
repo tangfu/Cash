@@ -113,7 +113,8 @@ void get_options(int arg_count, char **arg_value){
       break;
     case 'R':
       fprintf(stderr,"rc-file will not be read for this session\n");      
-      read_rc = 0;
+      if(read_rc)
+	read_rc = 0;
       break;
     case -1:
       break;

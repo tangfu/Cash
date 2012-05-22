@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS= -g -Wall -pedantic -O2 -march=athlon64 -lreadline -std=gnu99
+CFLAGS= -g -Wall -pedantic -O2 -lreadline -std=gnu99
 DEP = include.h cash.h
 OBJ = cash.o built_ins.o
 
