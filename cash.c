@@ -340,16 +340,15 @@ int main(int argc, char* arg[]){
       exit_clean(1, "invalid input");
     if(strlen(input) < 1)
       continue;
-    parse(input, argv);  
     if(history){
       if(!history_filename)
 	get_history_filename();
       add_history(input);
     }
+    parse(input, argv);  
     if(built_ins(argv) == 1)
       continue;
     else
       execute(argv);
-
   }
 }
