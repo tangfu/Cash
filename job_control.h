@@ -1,4 +1,4 @@
-x/*Copyright (C) 2012 Tyrell Keene, Max Rose
+/*Copyright (C) 2012 Tyrell Keene, Max Rose
 
   This file is part of Cash.
 

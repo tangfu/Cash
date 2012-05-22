@@ -70,10 +70,10 @@ int built_ins(char *in[]){
   }
   else
     return 0;
-} /*End restricted*/
+}
 
 void print_usage(FILE* stream, int exit_code, const char *string){
-  fprintf(stream, "%s", string);
+  fprintf(stream, "%s\n", string);
   exit(exit_code);
 }
 
