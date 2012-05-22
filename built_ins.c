@@ -1,27 +1,26 @@
-/*(C) Copyright 2012 Tyrell Keene
+/*Copyright (C) 2012 Tyrell Keene, Max Rose
+
   This file is part of Cash.
 
-  Cash is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  Cash is distributed in the hope that it will be useful,
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-  
-  You should have received a copy of the GNU General Public License
-  along with Cash.  If not, see <http://www.gnu.org/licenses/>.
-*/
 
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
 #include "include.h"
 #include "cash.h"
 
 extern _Bool restricted;
-extern _Bool open_history_file;
 extern _Bool history;
-extern _Bool alt_history;
 extern _Bool logging;
 extern _Bool verbose;
 extern _Bool read_rc;
@@ -34,19 +33,23 @@ extern const char* help_string;
 
 /*This will most likely undergo some major revamps in the near future.
 * The idea is to read the input we get from the user, see if it's a 
-* built in, then execute it and return 1. (if 1 is returned the main
+* built in, then execute it and return 1. If 1 is returned the main
 * loop back in cash.c skips the execute function and returns to the
 * start with the prompt*/
 
 int built_ins(char *in[]){
-  if(strcmp(in[0], "reparse-rc") == 0){
+  if( (strcmp(in[0], "reparse-rc") == 0)){
+    if(!read_rc){
+      fprintf(stderr,"rc file could not be read\n");
+      return 1;
+    }
     parse_rc();
     return 1;
   }
   if(strncmp(in[0], "#", 1) == 0)
     return 1;
   if(strcmp(in[0], "exit") == 0){
-    exit_clean(0);
+    exit_clean(0, NULL);
   }
   else
     if(strcmp(in[0], "cd") == 0 && in[1] != NULL && restricted == 0) {
@@ -111,6 +114,7 @@ void get_options(int arg_count, char **arg_value){
     case 'R':
       fprintf(stderr,"rc-file will not be read for this session\n");      
       read_rc = 0;
+      break;
     case -1:
       break;
     case '?':

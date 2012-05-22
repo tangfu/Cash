@@ -1,26 +1,33 @@
-/*(C) Copyright 2012 Tyrell Keene, Max Rose
+/*Copyright (C) 2012 Tyrell Keene, Max Rose
+
   This file is part of Cash.
 
-  Cash is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-  
-  Cash is distributed in the hope that it will be useful,
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-  
-  You should have received a copy of the GNU General Public License
-  along with Cash.  If not, see <http://www.gnu.org/licenses/>.
 
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 #include "cash.h"
 #include "job_control.h"
 
 /*Informational stuff*/
 char *version_string = "cash-0.1";
-const char *help_string = "Cash, version 0.1, Linux\n--help        -h    show this help screen\n--version     -v    show version info\n--restricted  -r    run restricted shell (no cd)\n--no-history  -n    dont write history to file for this session\n--logging     -l    the shell will keep a log in /var/log/messages for this session\n--verbose     -V    the shell will write the log to both /var/log/messages and stderr.                                        logging will be turned on with verbose\n";
+const char *help_string = "Cash, version 0.1, Linux\n--help\t\t-h\tshow this help screen\n"
+"--version\t-v\tshow version info\n"
+"--restricted\t-r\trun restricted shell (no cd)\n"
+"--no-history\t-n\tdont write history to file for this session\n"
+"--logging\t-l\tthe shell will keep a log in /var/log/messages for this session\n"
+"--verbose\t-V\tthe shell will write the log to both /var/log/messages and stderr.\n\t\t\tlogging will be turned on with verbose\n"
+"--no-rc\t\t-R\tdon't read from the rc file for this session.\n";
 
 const struct option long_options[] = {
   {"restricted", 0, NULL, 'r'},
@@ -33,7 +40,7 @@ const struct option long_options[] = {
   {NULL,         0, NULL,  0 }
 };
 
-/*for input*/
+/*For input*/
 char line[4096];        
 char *argv[4096];  
 char* input;
@@ -49,7 +56,6 @@ char *PS1;
 pid_t cash_pid, cash_pgid;
 int cash_interactive, cash_terminal;
 
-/*flags*/
 _Bool restricted;         /*For restricted shell, 1 is restricted, 0 is not. default 0*/
 _Bool logging;            /*logging option, 1 is on, 0 is off. default 0*/
 _Bool verbose;            /*verbose option, 1 is on, 0 is off. default 0*/
@@ -78,6 +84,7 @@ extern void get_options(int, char **);
 
 extern struct termios cash_tmodes;
 
+
 void open_log(void){
   if(verbose){
     if(!logging)
@@ -90,11 +97,22 @@ void open_log(void){
 
 /*
  * Here's our exit function. Just make sure everything
- * is freed, and any open files are closed.
+ * is freed, and any open files are closed. Added exit
+ * message if you have anything to say, if you don't 
+ * you can pass it null and nothing will be printed.
  */
-void exit_clean(int ret_no){
-  if(history)
-    append_history(4096, history_filename);
+void exit_clean(int ret_no, const char *exit_message){
+  /*This is a bit hacky, try to append_history.
+   *if that doesn't work, write history, which creates
+   *the file, then writes to it. Should suffice for now. 
+   */
+  if(history){
+    if(append_history(1000, history_filename) != 0) 
+      if(write_history(history_filename) != 0){
+	syslog(LOG_ERR,"could not write history: read or write error");
+	perror("history");
+      }
+  }
   if(input)
     free(input);
   if(history_filename)
@@ -109,6 +127,8 @@ void exit_clean(int ret_no){
     syslog(LOG_DEBUG, "shell exited");
     closelog();
   }
+  if(exit_message)
+    fprintf(stderr,"%s", exit_message);
   exit(ret_no);
 }
 
@@ -120,13 +140,13 @@ void init_env(void){
       kill (- cash_pgid, SIGTTIN);
     env = malloc(sizeof(ENVIRONMENT));
     if(!env){
-      perror("Couldn't allocate memory to environemnt structure\n");
+      perror("could not allocate memory to environemnt structure\n");
       if(logging){
-	syslog(LOG_CRIT,"couldnt allocate memory to environment structure");
-	exit_clean(1);
+	syslog(LOG_CRIT,"could not allocate memory to environment structure");
+	exit_clean(1, "init failure\n");
       }
     }else{
-      signal(SIGINT, SIG_IGN);
+      signal (SIGINT, SIG_IGN);
       signal (SIGQUIT, SIG_IGN);
       signal (SIGTSTP, SIG_IGN);
       signal (SIGTTIN, SIG_IGN);
@@ -149,7 +169,7 @@ void init_env(void){
       if(setpgid(cash_pgid, cash_pgid) < 0){
 	syslog(LOG_ERR,"could not spawn interactive shell");
 	perror("could not spawn interactive shell, failed at init");
-	exit_clean(1);
+	exit_clean(1, NULL);
       }
       tcsetpgrp(cash_terminal, cash_pgid);
       tcgetattr(cash_terminal, &cash_tmodes);
@@ -189,7 +209,8 @@ void parse_rc(void){
     return;
   }
   if(!(rc_file = fopen(buf, "r"))){
-    syslog(LOG_DEBUG, "rc file wasnt found or could not be opened");
+    perror("rc file");
+    syslog(LOG_DEBUG, "rc file was not found or could not be opened");
     free(buf);
     return;
   }
@@ -233,17 +254,6 @@ void parse(char *line, char **argv){
   *argv = '\0'; 
 }
 
-void add_nl(char *sp, int len){
-  volatile int i;
-  for(i = 0; i < len+1; i++){
-    if(sp[i] == '\0'){
-      sp[i] = '\n';
-      break;
-    }
-  }
-  return;
-}
-
 int execute(char **argv){
   pid_t pid;
   int status;
@@ -269,35 +279,32 @@ int execute(char **argv){
 }
 
 void get_history_filename(void){
-  size_t len;
-  len = strlen(env->home);
-  history_filename = malloc(4096);
+  history_filename = malloc(sizeof(char) * 4096);
   strcpy(history_filename, env->home);
   strcat(history_filename, default_hist_name);
 }
 
 int main(int argc, char* arg[]){
   char fmt_PS1[4096];
-
-  logging    = 0;
-  restricted = 0;
-  verbose    = 0;
-  read_rc    = 1;
-  history    = 1;
+  logging     = 0;
+  restricted  = 0;
+  verbose     = 0;
+  read_rc     = 1;
+  history     = 1;
 
   input = 0;
 
   get_options(argc,arg);
   
-  if(history){
+  if(history)
     using_history();
-  }
   if(logging){
     logging = 1;
     open_log();
   }
 
   init_env();
+  
   if(read_rc)
     parse_rc();
 
@@ -319,24 +326,24 @@ int main(int argc, char* arg[]){
    */
 
   while(1){  
-    if( (getcwd(env->cur_dir, sizeof(env->cur_dir)) == NULL))
+    if( (getcwd(env->cur_dir, sizeof(env->cur_dir)) == NULL)){
       if(logging)
-	syslog(LOG_ERR, "couldnt get current working directory");
-    
+	syslog(LOG_ERR, "could not get current working directory");
+      else
+	perror("get current directory");
+    }
     memset(fmt_PS1, 0, 4096);
     format_prompt(fmt_PS1, 4096);
     input = readline(fmt_PS1);
     if(!input)
-      exit_clean(1);
+      exit_clean(1, "invalid input");
     if(strlen(input) < 1)
       continue;
-    strcpy(line, input);
-    parse(line, argv);      
+    parse(input, argv);  
     if(history){
-      if(!history_filename)	
+      if(!history_filename)
 	get_history_filename();
-      else
-	add_history(line);
+      add_history(input);
     }
     if(built_ins(argv) == 1)
       continue;
