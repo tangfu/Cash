@@ -18,7 +18,6 @@
 */
 
 #include "cash.h"
-#include "job_control.h"
 
 /*Informational stuff*/
 char *version_string = "cash-0.1";
@@ -83,7 +82,7 @@ extern int built_ins(char **);
 extern void print_usage(FILE*, int, const char *);
 extern void get_options(int, char **);
 
-extern struct termios cash_tmodes;
+struct termios cash_tmodes;
 
 
 void open_log(void){

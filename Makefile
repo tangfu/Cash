@@ -4,7 +4,7 @@ DEP = include.h cash.h
 OBJ = cash.o built_ins.o
 
 cash:
-	${CC} cash.c built_ins.c job_control.c -o cash ${CFLAGS}
+	${CC} cash.c built_ins.c -o cash ${CFLAGS}
 
 clean:
 	rm -f cash
