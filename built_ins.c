@@ -16,6 +16,7 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
+
 #include "include.h"
 #include "cash.h"
 
@@ -43,25 +44,25 @@ int built_ins(char *in[]){
       fprintf(stderr,"rc file could not be read\n");
       return 1;
     }
-    parse_rc();
+    else
+      parse_rc();
     return 1;
   }
   if(strncmp(in[0], "#", 1) == 0)
     return 1;
-  if(strcmp(in[0], "exit") == 0){
+  if(strcmp(in[0], "exit") == 0)
     exit_clean(0, NULL);
-  }
-  else
-    if(strcmp(in[0], "cd") == 0 && in[1] != NULL && restricted == 0) {
-      if(chdir(in[1]) == -1){
-	perror("cd");
-	return 1;
-      }
-      else
-	return 1;
-    }
-  if(strncmp(in[0], "cd", 2) == 0 && in[1] == NULL && restricted == 0){
+
+  if(strncmp(in[0], "cd", 2) == 0 && in[1] == NULL && restricted == 0) {
     if(chdir(env->home) == -1){
+      perror("cd");
+      return 1;
+    }
+    else
+      return 1;
+  }
+  if(strcmp(in[0], "cd") == 0 && in[1] != NULL && restricted == 0) {
+    if(chdir(in[1]) == -1) {
       perror("cd");
       return 1;
     }
@@ -71,6 +72,7 @@ int built_ins(char *in[]){
   else
     return 0;
 }
+
 
 void print_usage(FILE* stream, int exit_code, const char *string){
   fprintf(stream, "%s\n", string);
@@ -102,11 +104,11 @@ void get_options(int arg_count, char **arg_value){
       print_usage(stdout, 0, version_string);
       break;
     case 'l':
-      fprintf(stderr,"log will be written for this session. log is kept in /var/log/messages\n");
+      fprintf(stderr,"log will be written for this session. log is kept in ~/.cash_log\n");
       logging = 1;
       break;
     case 'V':
-      fprintf(stderr,"log will be written to both /var/log/messages and stderr for this session\n");
+      fprintf(stderr,"log will be written to both ~/.cash_log and stderr for this session\n");
       if(!logging)
 	logging = 1;
       verbose = 1;      

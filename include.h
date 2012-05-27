@@ -22,26 +22,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 #include <termios.h>
-
 #include <sys/wait.h>
 #include <sys/types.h>
-
-#include <syslog.h>
 #include <limits.h>
 #include <pwd.h>
 #include <getopt.h>
-
 #include <readline/readline.h>
 #include <readline/history.h>
 
 /* Prototypes */
 void format_prompt(char*, int);
-void open_log(void);
 void print_usage(FILE*, int, const char *);
 void get_options(int, char **);
 void init_env(void);
@@ -50,8 +44,10 @@ void parse_rc(void);
 void rm_nl(char *, int);
 void exit_clean(int, const char *);
 void get_history_filename(void);
+int open_log(void);
 int built_ins(char **);
 int write_history_file(char *);
+int write_to_log(const char *, const char *);
 int execute(char **);
 char* strrplc(char*, const char *, char*);
 /* End Prototypes */
