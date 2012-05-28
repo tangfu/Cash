@@ -90,12 +90,17 @@ struct termios cash_tmodes;
 
 int open_log(void){
   char *buf;
-  if(!(buf = malloc(sizeof(char) * 4096)))
+  if(!(buf = malloc(sizeof(char) * 4096))){
+    logging  = 0;
+    open_log = 0
     return 1;
+  }
   strcpy(buf, env->home);
   strcat(buf, log_filename);
   if( !(log_file = fopen(buf, "a+"))){
     perror("log file");
+    logging  = 0;
+    log_open = 0;
     if(buf)
       free(buf);
     return 1;
@@ -160,8 +165,10 @@ void exit_clean(int ret_no, const char *exit_message){
  */
 
 void init_env(void){
-  if( !(env = malloc( sizeof( ENVIRONMENT ) )))   /* <- It almost looks like lisp!*/
+  if( !(env = malloc( sizeof( ENVIRONMENT ) ))){   /* <- It almost looks like lisp!*/
     perror("malloc env");
+    exit_clean( 1, "could not allocate memory to environment structure");
+  }
   env->home    = getenv("HOME");
   env->logname = getenv("LOGNAME");
   env->path    = getenv("PATH");
