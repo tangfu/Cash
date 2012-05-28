@@ -149,11 +149,15 @@ void exit_clean(int ret_no, const char *exit_message){
     free(PS1);
   if(log_open)
     fclose(log_file);
-
   if(exit_message)
     fprintf(stderr,"%s", exit_message);
   exit(ret_no);
 }
+
+/*
+ *This is where we get our environment variables and put them in env
+ *with setenv. This is required for a functional shell, so this *can't* fail
+ */
 
 void init_env(void){
   if( !(env = malloc( sizeof( ENVIRONMENT ) )))   /* <- It almost looks like lisp!*/

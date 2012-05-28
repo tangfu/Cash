@@ -13,6 +13,10 @@ I decided to release it into the wild and let my fellow hackers and coders
 enjoy it, for better or for worse. I invite you to take it apart, break it, 
 add to it, and anything else you might dream up.
 
+As you may have noticed, this is not the best, or most professional code
+out there. Feel more than free to email me, send in a patch, or fork it and
+show me how it's done. I'll just be glad to learn more, and get more features into Cash.
+
 Features
 ===
 -
