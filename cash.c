@@ -88,7 +88,7 @@ struct termios cash_tmodes;
 #define SHELL_ALERT "3:ALERT"  /*Minor error.*/
 #define SHELL_DEBUG "4:DEBUG"  /*Informational.*/
 
-int open_log(void){
+unsigned short int open_log(void){
   char *buf;
   if(!(buf = malloc(sizeof(char) * 4096)))
     return 1;
@@ -107,7 +107,7 @@ int open_log(void){
   return 0;
 }
 
-int write_to_log(const char *priority, const char *message){
+unsigned short int write_to_log(const char *priority, const char *message){
   if(!logging)
     return 1;
   else
@@ -278,7 +278,7 @@ void parse(char *line, char **argv){
   *argv = '\0'; 
 }
 
-int execute(char **argv){
+unsigned short int execute(char **argv){
   pid_t pid;
   int status;
   if ((pid = fork()) < 0) {     
